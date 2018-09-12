@@ -1,0 +1,382 @@
+import java.io.Console;
+import java.io.File;
+
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+
+import javax.crypto.spec.SecretKeySpec;//
+import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
+
+
+import java.util.Arrays;
+
+
+import java.security.*;//
+public class Crypto {
+	
+	/**
+	 * This programme is part of the coursework for the module System Security. The programme asks for the user to chose a file in order to encrypt
+	 * with his password. The password is being verified. The encryption is achieved with AES encryption algorithm in CBC mode with PKCS5 padding scheme.
+	 * An authentication tag is produced to ensure the integrity of the cipher text. Encryption and after MAC is used in this programme.
+	 * The plain text is deleted and a new file which contains the IV, cipher text and authentication tag is created.
+	 * 
+	 * @author Georgios Zervakis
+	 * @version 16/12/2016
+	 * 
+	 */
+	public static void main(String[] args) throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IllegalStateException, IllegalBlockSizeException, BadPaddingException, IOException{
+		/*
+		 * The programme welcomes the user and asks him to chose encryption or decryption
+		 */
+		System.out.println("Welcome to ENIGMA encryption");
+		System.out.println("if you want to encrypt a file press e");
+		System.out.println("if you want to decrypt a file press d");
+		/*
+		 * The console class is used in order to receive the password safely without appearing in the interface
+		 */
+		Console console=System.console();
+		String answer=console.readLine();
+		/*
+		 * The following loop checks if the user's chose is right otherwise the programme will ask again the user to choose between encryption and decryption
+		 */
+		while(!answer.equals("e") && !(answer.equals("d")))
+		{
+			System.out.println("You entered wrong letter");
+			System.out.println("if you want to encrypt a file press e");
+			System.out.println("if you want to decrypt a file press d");
+			answer=console.readLine();
+		}
+		/*
+		 * If the user choose encryption the following part of the code will be executed
+		 */
+		if (answer.equals("e")){
+		/*
+		 * The program asks the users to enter the name of the file to be encrypted
+		 */
+		System.out.println("Which text would you like to encrypt?");
+		String whichText=console.readLine();//out.txt
+		
+		File f=new File(whichText);
+		
+		/*
+		 * The following part of the code checks whether this file exists, is encrypted or does not exist
+		 * The program informs the user with a proper message of each possibility and returns the path
+		 * if it is encrypted
+		 */
+		String fEncrypt=f+".8102";// if the file is encrypted it will have the suffix .8102
+		File fEncryptFile=new File(fEncrypt);
+		
+		if(fEncryptFile.exists()){
+			System.out.println("The file is encrypted");
+			String pathName=fEncryptFile.getAbsolutePath();
+			System.out.println("File's pathname = " + pathName);
+			return;
+			
+		}
+		else if (f.exists()){
+			System.out.println("Exncryption process starts");
+		}
+		else {
+			System.out.println("There is no file with this name");
+			return;
+			
+		}
+		
+		System.out.println("Enter password");//Prompts the user to give a password
+		
+		/*
+		 * In the following part, the program receives the password in a char array, turns it into a String
+		 * and asks the user to verify the password. If the passwords match then the encryption starts,
+		 * otherwise the user has got 3 attempts to enter a correct password until the program terminates.
+		 */
+		char password1[]=console.readPassword();
+		String password=new String(password1);
+		System.out.println("Verify password");
+		char passwordVerify1[]=console.readPassword();
+		String passwordVerify=new String(passwordVerify1);
+		
+		int j=0;
+		while(!password.equals(passwordVerify)){
+			System.out.println("");
+			System.out.println("Wrong password");
+			System.out.println("You have got "+(3-j)+" more attempts");
+			System.out.println("Enter password again");
+			password1=null;
+			password1=console.readPassword();
+			password=new String(password1);
+			
+			System.out.println("Verify password");
+			passwordVerify1=null;
+			passwordVerify1=console.readPassword();
+			passwordVerify=new String(passwordVerify1);
+			
+			j++;
+			if(j==3){
+				System.out.println("3 wrong attempts...Sorry");
+				return;
+				
+			}
+		}
+		System.out.println("Password has been verified");
+		
+		
+		/*
+		 * The next part of the code hashes the password with a specified algorithm SHA-256
+		 * and produces an array of 32 bytes.
+		 */
+		MessageDigest hPassword=MessageDigest.getInstance("SHA-256");
+		hPassword.update(password.getBytes());
+		byte [] digest=hPassword.digest();
+		
+		
+		/*
+		 * The following part of the code splits the hashed password into two halves.
+		 * The first half a 16 byte array which will be used to produce the key for the encryption
+		 * The second half aill be used to create the key for the MAC
+		 */
+		byte [] aKey = Arrays.copyOfRange(digest, 0, 16);
+		byte [] mKey = Arrays.copyOfRange(digest, 16, 32);
+		
+		/*
+		 * The next line produces the AES key
+		 */
+		Key aesKey=new SecretKeySpec(aKey,"AES");
+		
+		/*
+		 * The following part creates a cipher object with AES algorithm, CBC mode and PKCS5 as padding scheme
+		 */
+		Cipher enigma = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		
+		/*
+		 * The CBC mode requires initial value (IV) to be passed. It is used for the encryption of the first block
+		 */
+		byte[] iv=new byte[16];
+		SecureRandom random=new SecureRandom(); 
+		random.nextBytes(iv);
+		IvParameterSpec ivParameterSpec = new IvParameterSpec(iv);
+		/*
+		 * The following part initialises the cipher in encryption mode, with the produced key and iv parameter
+		 */
+		enigma.init(Cipher.ENCRYPT_MODE, aesKey, ivParameterSpec);
+		
+		/*
+		 * The following line turns the plain text into bytes and the cipher encrypts it and stores it into an array of bytes
+		 */
+		byte[] data= Files.readAllBytes(f.toPath());//throws IOException
+		byte [] cipherText=enigma.doFinal(data);//throws IllegalBlockSizeException,BadPaddingException
+		
+		System.out.println("");
+		
+		/*
+		 * The following part of the code creates a MAC object that implements the specific MAC algorithm: HmacSHA1
+		 * A Secret Key is created from the given array (second half of the hashed password)
+		 * Afterwards, the MAC is initialised with the secret key.
+		 * The MAC processes arrays of bytes, the iv parameters are turned into bytes.
+		 * The MAC processes the iv and the cipher text and produces the authentication tag whish is a fixed 20 bytes array 
+		 */
+		Mac mac = Mac.getInstance("HmacSHA1"); 
+		SecretKeySpec macKey= new SecretKeySpec(mKey,"HmacSHA1"); 
+		mac.init(macKey); 
+		byte [] getIv=ivParameterSpec.getIV();
+		
+		
+		mac.update(getIv); 
+		mac.update(cipherText); 
+		byte [] authTag=mac.doFinal(); 
+		
+		
+		/*
+		 * An FileOutputStream object is being created so as to store the raw bytes into a new file with the suffix .8102
+		 */
+		String name=f.getName();
+		FileOutputStream encryptedText=new FileOutputStream(name+".8102");
+		
+		encryptedText.write(getIv);
+		encryptedText.write(cipherText);
+		encryptedText.write(authTag);
+		encryptedText.close();
+		
+		File fileCheck=new File(name+".8102");
+		byte []fileCheckBytes=Files.readAllBytes(fileCheck.toPath());
+		
+		/*
+		 * The program informs the user that the plain text has been deleted and
+		 * that the new file has been created. The program prints the paths for both
+		 * The encryption part is finished and the program terminates
+		 */
+		System.out.println("\n");
+		System.out.println("Removed the plaintext file: "+f.getAbsolutePath());
+		f.delete();//deletes the plaintext
+		
+		File enc=new File(name+".8102");
+		System.out.println("Created new encrypted file: "+enc.getAbsolutePath());
+		}
+		
+		/*
+		 * If the user choose decryption, the following part of the code is being executed
+		 */
+		else if(answer.equals("d")){
+		/*
+		 * Initially, the program asks the user to choose which file to decrypt
+		 * The program checks whether the file exists or is already decrypted.
+		 * The program informs the user for each case
+		 * The first if statement checks if the input has got a dot. If the input does not have a dot,
+		 * the program terminates. Additionally, before the use of this if statement, an error occured its time
+		 * I entered a name without dot, because of the method .lastIndexOf
+		 */
+		System.out.println("Which text would you like to decrypt?");
+		String textToDecrypt2=console.readLine();
+		if(!textToDecrypt2.contains("."))
+		{
+			System.out.println("There is no such a file");
+			return;
+		}
+		
+		int index=textToDecrypt2.lastIndexOf(".");
+		String text=textToDecrypt2.substring(0,index);
+		
+		String textToDecrypt=textToDecrypt2;
+		
+		String textDecrypted=text;
+		File fileToDecrypt=new File(textToDecrypt);
+		File fileDecrypt=new File(textDecrypted);
+		if(fileToDecrypt.exists())
+		{
+			System.out.println("The file found, the decryption process starts");
+		}else if(fileDecrypt.exists())
+		{
+			System.out.println("The file is already decrypted");
+			String pathName2=fileDecrypt.getAbsolutePath();
+			System.out.println("File's pathname= "+pathName2);
+			return;
+		}
+		
+		else {
+			System.out.println("There is no such a file");
+			return;
+			
+		}
+		/*
+		 * Prompts the user to give a password for decryption
+		 * The password again is being read from the console safely
+		 */
+		System.out.println("Enter password for decryption");
+		
+		char password3[]=console.readPassword();
+		String password2=new String(password3);
+		
+		
+		/*
+		 * The program hashes the password with the SHA-256 algorithm and produces 32 bytes array
+		 */
+		MessageDigest hPassword2=MessageDigest.getInstance("SHA-256");
+		hPassword2.update(password2.getBytes());
+		byte [] digest2=hPassword2.digest();
+		/*
+		 * The next part splits the hashed password into two halves in order to be seed for the AES and MAC keys
+		 */
+		byte [] aKey2 = Arrays.copyOfRange(digest2, 0, 16);
+		byte [] mKey2 = Arrays.copyOfRange(digest2, 16, 32);
+		/*
+		 * The following part creates a MAC object so as to produce the authentication tag to check with the sent one
+		 * The same MAC algorithm is being used as the encryption mode
+		 * MAC's key is generated from the second half of the given password
+		 * if the password is different from the password which was given in the ecryption part a different key is produced
+		 */
+		Mac mac2=Mac.getInstance("HmacSHA1");
+		SecretKeySpec macKey2=new SecretKeySpec(mKey2,"HmacSHA1");
+		mac2.init(macKey2);//initialises this MAC object with the given key      
+		/*
+		 * A File object is created to read the cipher text
+		 * The bytes of the cipher text are stored into the following array of bytes
+		 */
+		File file2=new File(textToDecrypt);
+		byte [] encryptedText2=Files.readAllBytes(file2.toPath());
+		
+		/*
+		 * The first 16 bytes are the initial value, the last 20 bytes are the authentication tag
+		 * the rest bytes in the middle are the cipher text. I split the the whole file in array of bytes
+		 * in order to distinguish each thing
+		 */
+		byte[] ivArray=Arrays.copyOfRange(encryptedText2, 0, 16);
+		byte[] cipherTextToDecrypt=Arrays.copyOfRange(encryptedText2, 16,encryptedText2.length-20);
+		byte[] macTag=Arrays.copyOfRange(encryptedText2, encryptedText2.length-20, encryptedText2.length);
+		
+		/*
+		 * The MAC processes the initial value and the cipher text as the encryption mode
+		 * If the password is right the same key is used, if the cipher text is unmodified 
+		 * the same initial value and cipher text is used, hence the same authentication tag
+		 * as the encryption mode should be produced
+		 */
+		mac2.update(ivArray);
+		mac2.update(cipherTextToDecrypt);
+		
+		byte [] originalTag=mac2.doFinal(); //finishes the MAC operation
+		/*
+		 * The following part of the code checks whether the two authentication tags are the same
+		 * and informs the user with a proper message for each scenario
+		 */
+		if (macTag.length!=originalTag.length)
+		{
+			System.out.println("The the text has been tampered");
+			return;
+			
+		}
+		else {
+			for (int i=0;i<macTag.length;i++)
+			{
+				if(macTag[i]!=originalTag[i])
+				{
+					System.out.println("The text has been tampered");
+					return;
+					
+				}
+			}
+		}
+		/*
+		 * The program informs the user that the decryption part starts
+		 */
+		System.out.println("The Tag is original the Decryption process starts");
+		/*
+		 * The following part creates the key for the decryption cipher using the first half of the hashed password
+		 * The program uses the same initial value as the encryption mode which is the first 16 bytes of the cipher text
+		 * The cipher has got the same mode and padding like the encryption part
+		 */
+		Key aesKey2=new SecretKeySpec(aKey2,"AES");
+		Cipher marella = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		IvParameterSpec ivParameterSpec2 = new IvParameterSpec(ivArray);
+		marella.init(Cipher.DECRYPT_MODE, aesKey2, ivParameterSpec2);
+		/*
+		 * the plaintext is stored as bytes into the following array
+		 */
+		byte [] plainText=marella.doFinal(cipherTextToDecrypt);
+		
+		/*
+		 * A fileOutputStream object is used the create a new file in order to store the plain text
+		 */
+		FileOutputStream decryptedText=new FileOutputStream(textDecrypted);//creates the new file
+		decryptedText.write(plainText);
+		decryptedText.close();
+		/*
+		 * The program informs the user that the cipher text has been deleted and that the
+		 * new file which contains the plain text is created
+		 */
+		System.out.println("\n");
+		System.out.println("Removed the encrypted file: "+file2.getAbsolutePath());
+		file2.delete();//deletes the plaintext
+		
+		
+		File enc=new File(textDecrypted);
+		System.out.println("Created the plaintext file: "+enc.getAbsolutePath());
+		}
+		
+		
+	}
+	
+	
+}
